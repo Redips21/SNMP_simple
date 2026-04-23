@@ -11,6 +11,7 @@ class Parameter_Node:
 
 
 
+
 class Node:
 
     def __init__(self, name, ip, port, community, parameters: list[Parameter_Node]):
@@ -22,7 +23,10 @@ class Node:
 
     
     def getOids(self) -> dict[int, str]:
-        index_oid_pairs = {}
-        for index, parameter in enumerate(self.parameters):
-            index_oid_pairs[index] = parameter.oid
+        #index_oid_pairs = {}
+        #for index, parameter in enumerate(self.parameters):
+        #   index_oid_pairs[index] = parameter.oid
+        index_oid_pairs = []
+        for parameter in self.parameters:
+           index_oid_pairs.append(parameter.oid)
         return index_oid_pairs

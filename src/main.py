@@ -1,11 +1,17 @@
 import asyncio
+import time
+
 import yaml
 import rich
 from rich.table import Table
 from rich.live import Live
+from puresnmp import varbind as VarBind
 from puresnmp import ObjectIdentifier as OID
 
 from node import Node, Parameter_Node
+from x690.types import PrintableString
+
+
 #from requests import requestV1
 
 
@@ -17,7 +23,6 @@ def load_hostsMap(path: str) -> dict:
       
     if not isinstance(data, dict):
       raise TypeError('При загрузке данных из конфига .yaml не был получен тип данных "dict"')
-        
     return data
     
   except FileNotFoundError:
@@ -37,25 +42,25 @@ def convert_data_to_Nodes(data: dict) -> list[Node]:
   
   nodes = []
 
-  for obj in data: 
+  for obj in data.values():
 
-    name = data.get(obj).get('name')
-    ip = data.get(obj).get('ip')
-    port = data.get(obj).get('port')
-    community = data.get(obj).get('community_string')
-  
-    values = data.get(obj).get('values')
+    name = obj.get('name')
+    ip = obj.get('ip')
+    port = obj.get('port')
+    community = obj.get('community_string')
+
+    values = obj.get('values')
 
     parameters = []
     
-    for value in values:
-      name: data.get(obj).get('values').get(value).get('name')
-      oid = data.get(obj).get('values').get(value).get('oid')
-      max_value = data.get(obj).get('values').get(value).get('max_value')
-      min_value = data.get(obj).get('values').get(value).get('min_value')
-      target_value = data.get(obj).get('values').get(value).get('catch_value')
+    for value in values.values():
+      nameV = value.get('name')
+      oidV = value.get('oid')
+      max_valueV = value.get('max_value')
+      min_valueV = value.get('min_value')
+      target_valueV = value.get('catch_value')
 
-      parameter = Parameter_Node(name,oid, max_value, min_value, target_value)
+      parameter = Parameter_Node(nameV,oidV, max_valueV, min_valueV, target_valueV)
       parameters.append(parameter)
     
     node = Node(name, ip, port, community, parameters)
@@ -64,15 +69,12 @@ def convert_data_to_Nodes(data: dict) -> list[Node]:
     
   return nodes
 
+#nodes = [] # переделать в кортеж
 
-  
+#path = '../data/hostsMap.yaml'
 
-nodes = [] # переделать в кортеж
-
-path = '../data/hostsMap.yaml'
-
-data = load_hostsMap(path)
-nodes = convert_data_to_Nodes(data)
+#data = load_hostsMap(path)
+#nodes = convert_data_to_Nodes(data)
 
 #отправка запросов к узлам
 #for node in nodes:
@@ -90,19 +92,39 @@ nodes = convert_data_to_Nodes(data)
 
   
 if __name__ == '__main__':
+  import sys
+  from pathlib import Path
+  sys.path.append(str(Path(__file__).parent / 'testInterface'))
+  from testInterface import interface
+  from requests import requestV1
 
-  table = Table()
-  table.add_column("Имя")
-  table.add_column("IP_Адрес/Порт")
-  table.add_column("Параметр/Значение")
 
-  with Live(table, refresh_per_second=2) as live:  # update 4 times a second to feel fluid
-    couter = 0
-    for node in nodes:
-      table.add_row(node.name,
-      node.ip + "/" + node.port,
-      node.values[counter] + "/" + answer[counter] )
-    time.sleep(0.4)
+
+  data = load_hostsMap('./data/hostsMap.yaml')
+  nodes = convert_data_to_Nodes(data)
+
+  with Live(interface.create_table(nodes), refresh_per_second=3) as live:
+    check_exit = True
+
+    while (check_exit):
+
+      for node in nodes:
+        ip = node.ip
+        port_number = node.port
+        password_type = node.community
+        oids = node.getOids()
+
+        #rich.inspect(node)
+        result = asyncio.run(requestV1(ip, port_number, password_type, oids))
+
+        if isinstance(result, list):
+           for return_value,parameter in zip(result,node.parameters):
+             parameter.value = return_value
+          #rich.inspect(node)
+
+        live.update(interface.create_table(nodes))
+        time.sleep(0.1)
+
 
 
   
