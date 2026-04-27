@@ -1,13 +1,13 @@
 from typing import Protocol
 
-class observer(Protocol):
+class Observer(Protocol):
     def update(self, info: str) -> None:
         pass
 
 
 class My_logger:
     logs: list[str]
-    observers: tuple[observer]
+    observers: tuple[Observer]
 
     def __init__(self, *observers):
         self.observers = observers
