@@ -1,17 +1,13 @@
 import asyncio
 import time
-
 import yaml
 import rich
 from rich.table import Table
 from rich.live import Live
 from puresnmp import varbind as VarBind
 from puresnmp import ObjectIdentifier as OID
-
 from node import Node, Parameter_Node
 from x690.types import PrintableString
-
-
 #from requests import requestV1
 
 
@@ -70,9 +66,7 @@ def convert_data_to_Nodes(data: dict) -> list[Node]:
   return nodes
 
 #nodes = [] # переделать в кортеж
-
 #path = '../data/hostsMap.yaml'
-
 #data = load_hostsMap(path)
 #nodes = convert_data_to_Nodes(data)
 
