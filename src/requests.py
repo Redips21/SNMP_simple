@@ -38,7 +38,7 @@ async def requestV1(ip, port_number, password_type, oids_str):
         result = await asyncio.wait_for(coro, timeout=5.0)
         return result
     except asyncio.TimeoutError:
-        #print("Превышен лимит ожидания ответа")
+        #print("Error request: Превышен лимит ожидания ответа")
         return None
     except Exception as e:
         #print(f"Error request: {e}")
