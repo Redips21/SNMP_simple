@@ -35,7 +35,7 @@ def create_table(nodes: list) -> Table:
 #        time.sleep(0.4)
 
 
-def main():
+def check():
     from src import main
     from src import node
 
@@ -54,4 +54,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    from pathlib import Path
+
+    sys.path.append(str(Path(__file__).parent.parent))
+    check()

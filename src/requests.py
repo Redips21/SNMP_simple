@@ -1,6 +1,8 @@
 import asyncio
 from puresnmp import Client, ObjectIdentifier as OID, V2C, V1, PyWrapper
 from puresnmp import varbind as VarBind
+from contextlib import redirect_stderr
+import io, sys
 
 # client = Client("127.0.0.1", V2C("public"), port=1024)
 # coro = client.multiget(
@@ -36,10 +38,10 @@ async def requestV1(ip, port_number, password_type, oids_str):
         result = await asyncio.wait_for(coro, timeout=5.0)
         return result
     except asyncio.TimeoutError:
-        print("Превышен лимит ожидания ответа")
+        #print("Превышен лимит ожидания ответа")
         return None
     except Exception as e:
-        print(f"Error request: {e}")
+        #print(f"Error request: {e}")
         return None
 
 

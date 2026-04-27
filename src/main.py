@@ -94,7 +94,8 @@ def convert_data_to_Nodes(data: dict) -> list[Node]:
 if __name__ == '__main__':
   import sys
   from pathlib import Path
-  sys.path.append(str(Path(__file__).parent / 'testInterface'))
+
+  sys.path.append(str(Path(__file__).parent.parent))
   from testInterface import interface
   from requests import requestV1
 
