@@ -191,14 +191,102 @@ class DataBase:
 
                ''')
 
-    def convert_nodes_to_tables(self, nodes: list):
-        pass
-
-    def insert_nodes_in_db(self, nodes:list):
-        names_device_snmp = [node.name for node in nodes]
-
+    def insert_nodes_in_db(self, nodes: list[Node]):
+        """Заполняет первоначальные данные из списка узлов в таблицы БД."""
         with sqlite3.connect(self.db_path) as connection:
-            pass
+            cursor = connection.cursor()
+
+            for node in nodes:
+                # 1. Локация
+                cursor.execute(
+                    "SELECT id FROM locations WHERE building = ? AND cabinet = ?",
+                    (node.location.building, node.location.cabinet)
+                )
+                loc_row = cursor.fetchone()
+                if loc_row:
+                    location_id = loc_row[0]
+                else:
+                    cursor.execute(
+                        "INSERT INTO locations (building, cabinet) VALUES (?, ?)",
+                        (node.location.building, node.location.cabinet)
+                    )
+                    location_id = cursor.lastrowid
+
+                # 2. SNMP параметры подключения
+                cursor.execute(
+                    "SELECT id FROM parameters_for_connection_SNMP WHERE ip = ? AND port = ? AND community_string = ?",
+                    (node.ip, node.port, node.community)
+                )
+                snmp_row = cursor.fetchone()
+                if snmp_row:
+                    snmp_id = snmp_row[0]
+                else:
+                    cursor.execute(
+                        "INSERT INTO parameters_for_connection_SNMP (ip, port, version_snmp, community_string) VALUES (?, ?, ?, ?)",
+                        (node.ip, node.port, 1, node.community)
+                    )
+                    snmp_id = cursor.lastrowid
+
+                # 3. Устройство (list_devices)
+                cursor.execute(
+                    "SELECT id FROM list_devices WHERE name = ?",
+                    (node.name,)
+                )
+                device_row = cursor.fetchone()
+                if device_row:
+                    device_id = device_row[0]
+                else:
+                    cursor.execute(
+                        "INSERT INTO list_devices (name, fk_location_id, fk_parameters_for_connection_SNMP) VALUES (?, ?, ?)",
+                        (node.name, location_id, snmp_id)
+                    )
+                    device_id = cursor.lastrowid
+
+                # Сохраняем device_id в сам объект node для удобства последующих вставок
+                node.db_id = device_id
+
+                # 4. Параметры (viewed_parameters_snmp) и уставки (present_parameters_snmp)
+                for param in node.parameters:
+                    cursor.execute(
+                        "SELECT id FROM viewed_parameters_snmp WHERE oid = ?",
+                        (param.oid,)
+                    )
+                    param_row = cursor.fetchone()
+                    if param_row:
+                        param_id = param_row[0]
+                    else:
+                        cursor.execute(
+                            "INSERT INTO viewed_parameters_snmp (name_parameter, oid) VALUES (?, ?)",
+                            (param.name, param.oid)
+                        )
+                        param_id = cursor.lastrowid
+
+                    param.db_id = param_id
+
+                    # Запись уставки / планового значения в present_parameters_snmp
+                    catch_val = str(param.target_value) if param.target_value is not None else ""
+                    cursor.execute(
+                        "SELECT id FROM present_parameters_snmp WHERE fk_list_devices_id = ? AND fk_viewed_parameter_snmp_id = ?",
+                        (device_id, param_id)
+                    )
+                    if not cursor.fetchone():
+                        cursor.execute(
+                            "INSERT INTO present_parameters_snmp (fk_list_devices_id, fk_viewed_parameter_snmp_id, catch_value, fk_status_list_id) VALUES (?, ?, ?, ?)",
+                            (device_id, param_id, catch_val, 1)
+                        )
+
+            connection.commit()
+
+    def insert_history_record(self, device_id: int, param_id: int, value: str, status_id: int = 1):
+        """Добавляет замер значения в таблицу history_parameters_SNMP."""
+        with sqlite3.connect(self.db_path) as connection:
+            cursor = connection.cursor()
+            now_timestamp = int(time.time())
+            cursor.execute(
+                "INSERT INTO history_parameters_SNMP (fk_list_devices_id, fk_viewed_parameters_snmp_id, data_time, value, fk_status_list_id) VALUES (?, ?, ?, ?, ?)",
+                (device_id, param_id, now_timestamp, str(value), status_id)
+            )
+            connection.commit()
             
 
 

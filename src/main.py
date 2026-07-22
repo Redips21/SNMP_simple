@@ -1,26 +1,20 @@
 import asyncio
-import time
 import yaml
-import rich
-from rich.table import Table
-from rich.live import Live
-from puresnmp import varbind as VarBind
-from puresnmp import ObjectIdentifier as OID
+from pathlib import Path
 from node import Node, Parameter_Node, Location_Node
-from x690.types import PrintableString
-#from requests import requestV1
+from requests import requestV1
+from data_base import DataBase
 
 
-#"../data/hostsMap.yaml"
 def load_hostsMap(path: str) -> dict:
   try:
     with open(path, 'r', encoding='UTF-8') as file:
       data = yaml.safe_load(file)
-      
+
     if not isinstance(data, dict):
       raise TypeError('При загрузке данных из конфига .yaml не был получен тип данных "dict"')
     return data
-    
+
   except FileNotFoundError:
     print(f"Файл {path} не найден")
     return {}
@@ -36,22 +30,17 @@ def convert_data_to_Nodes(data: dict) -> list[Node]:
   nodes = []
 
   for obj in data.values():
-
     name = obj.get('name')
     ip = obj.get('ip')
     port = obj.get('port')
     community = obj.get('community_string')
 
-    # Извлекаем информацию о местоположении
     location_data = obj.get('location', {})
     building = location_data.get('building', '')
     cabinet = location_data.get('cabinet', '')
-
-    # Создаем объект Location_Node
     location = Location_Node(building, cabinet)
 
     values = obj.get('values', {})
-
     parameters = []
 
     for value in values.values():
@@ -64,73 +53,55 @@ def convert_data_to_Nodes(data: dict) -> list[Node]:
       parameter = Parameter_Node(nameV, oidV, max_valueV, min_valueV, target_valueV)
       parameters.append(parameter)
 
-    # Создаем узел с местоположением
     node = Node(name, ip, port, community, location, parameters)
-
     nodes.append(node)
 
   return nodes
 
-#nodes = [] # переделать в кортеж
-#path = '../data/hostsMap.yaml'
-#data = load_hostsMap(path)
-#nodes = convert_data_to_Nodes(data)
 
-#отправка запросов к узлам
-#for node in nodes:
-#  ip = node.ip
-#  port = node.port
-#  community = node.community#
+async def process_node(node: Node, db: DataBase):
+  oids = node.getOids()
+  result = await requestV1(node.ip, node.port, node.community, oids)
 
- # oids = []
- # for parameter in node.paraters:
+  if isinstance(result, list):
+    for return_value, parameter in zip(result, node.parameters):
+      parameter.value = return_value
+      print(f"[{node.name}] {parameter.name} ({parameter.oid}) = {return_value}")
+
+      # Запись измеренного значения в БД (в таблицу history_parameters_SNMP)
+      if hasattr(node, 'db_id') and hasattr(parameter, 'db_id'):
+        db.insert_history_record(node.db_id, parameter.db_id, str(return_value))
 
 
-  
+async def main():
+  # Настройка путей
+  base_dir = Path(__file__).parent.parent
+  yaml_path = base_dir / "data" / "hostsMap_1.yaml"
+  db_path = base_dir / "data" / "monitor.db"
 
-#answer = asyncio.run(requestV1(ip, port, community, oids))
+  # Инициализация БД
+  db = DataBase(str(db_path))
+  db.create_tables()
 
-  
-if __name__ == '__main__':
-
-  import sys
-  from pathlib import Path
-  sys.path.append(str(Path(__file__).parent.parent))
-  from testInterface import interface
-  from requests import requestV1
-  from my_logger import My_logger
-
-  my_logger = My_logger()
-  data = load_hostsMap('../data/hostsMap.yaml')
+  # Загрузка узлов из YAML
+  data = load_hostsMap(str(yaml_path))
   nodes = convert_data_to_Nodes(data)
 
+  # Заполнение первоначальных справочников в БД
+  db.insert_nodes_in_db(nodes)
+
+  print("Мониторинг запущен. Для остановки нажмите Ctrl+C.")
+
+  while True:
+    # Асинхронный опрос всех узлов одновременно
+    tasks = [process_node(node, db) for node in nodes]
+    await asyncio.gather(*tasks)
+
+    await asyncio.sleep(1.0)
 
 
-
-  with Live(interface.create_table(nodes), refresh_per_second=3) as live:
-    check_exit = True
-
-    while (check_exit):
-
-      for node in nodes:
-        ip = node.ip
-        port_number = node.port
-        password_type = node.community
-        oids = node.getOids()
-
-
-        result = asyncio.run(requestV1(ip, port_number, password_type, oids))
-
-        if isinstance(result, list):
-           for return_value,parameter in zip(result,node.parameters):
-             parameter.value = return_value
-
-
-        time.sleep(0.3)
-
-
-
-  
-
-
-
+if __name__ == '__main__':
+  try:
+    asyncio.run(main())
+  except KeyboardInterrupt:
+    print("\nМониторинг остановлен.")
