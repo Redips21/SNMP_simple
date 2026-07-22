@@ -1,6 +1,6 @@
 import sqlite3
 import os
-import node
+from node import Node
 
 class DataBase:
     def __init__(self, db_path='monitor.db'):  # Один параметр, одно имя
