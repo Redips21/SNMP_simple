@@ -1,0 +1,64 @@
+# Конфигурация UPS устройств
+OBJ1:
+
+  name: "UPS1_balashov"
+  ip: "192.168.1.2"
+  port: 161
+  version: "SNMPv1" # Соотнести с записью в БД (в БД INTEGER)
+  community_string: "public"
+
+  location:
+    building: "general building"
+    cabinet:  "132"
+
+  values:
+
+    val_1:
+      name: input_voltage
+      oid: "1.3.6.1.4.1.534.1.3.4.1.2.1"
+      max_value: 240
+      min_value: 180
+
+    val_2:
+      name: output_voltage
+      oid: "1.3.6.1.4.1.534.1.2.2.0"  # Обратите внимание: OID совпадает с input_voltage
+      max_value: 240
+      min_value: 180
+
+    val_3:
+      name: battery_charge
+      oid: "1.3.6.1.4.1.534.1.2.4.0"
+      min_value: 40
+      catch_value: 100
+
+OBJ2:
+
+  name: "UPS2"
+  ip: "127.0.0.1"
+  port: 1024
+  version: "SNMPv1"
+  community_string: "public"
+
+  location:
+    building: "technical building"
+    cabinet: "132"
+
+  values:
+
+    val_1:
+      name: input_voltage
+      oid: "1.3.6.1.4.1.99999.1.1.0"
+      max_value: 240
+      min_value: 180
+
+    val_2:
+      name: output_voltage
+      oid: "1.3.6.1.4.1.99999.1.2.0"  # Обратите внимание: OID совпадает с input_voltage
+      max_value: 240
+      min_value: 180
+
+    val_3:
+      name: battery_charge
+      oid: "1.3.6.1.4.1.99999.1.3.0"
+      min_value: 40
+      catch_value: 100
