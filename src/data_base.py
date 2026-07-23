@@ -1,10 +1,15 @@
 import sqlite3
-import os
+from pathlib import Path
 from node import Node
+import time
 
 class DataBase:
     def __init__(self, db_path='monitor.db'):  # Один параметр, одно имя
         self.db_path = db_path  # Один атрибут
+
+    def check_db_exist(self) -> bool:
+        file = Path(self.db_path)
+        return file.exists()
 
     def create_tables(self):
         with sqlite3.connect(self.db_path) as connection:
@@ -197,7 +202,6 @@ class DataBase:
             cursor = connection.cursor()
 
             for node in nodes:
-                # 1. Локация
                 cursor.execute(
                     "SELECT id FROM locations WHERE building = ? AND cabinet = ?",
                     (node.location.building, node.location.cabinet)
@@ -205,6 +209,10 @@ class DataBase:
                 loc_row = cursor.fetchone()
                 if loc_row:
                     location_id = loc_row[0]
+                    cursor.execute(
+                        "UPDATE locations SET building = ?, cabinet = ? WHERE id = ?",
+                        (node.location.building, node.location.cabinet, location_id)
+                    )
                 else:
                     cursor.execute(
                         "INSERT INTO locations (building, cabinet) VALUES (?, ?)",
@@ -212,7 +220,7 @@ class DataBase:
                     )
                     location_id = cursor.lastrowid
 
-                # 2. SNMP параметры подключения
+                #SNMP параметры подключения
                 cursor.execute(
                     "SELECT id FROM parameters_for_connection_SNMP WHERE ip = ? AND port = ? AND community_string = ?",
                     (node.ip, node.port, node.community)
@@ -220,6 +228,10 @@ class DataBase:
                 snmp_row = cursor.fetchone()
                 if snmp_row:
                     snmp_id = snmp_row[0]
+                    cursor.execute(
+                        "UPDATE parameters_for_connection_SNMP SET ip = ?, port = ?, version_snmp = ?, community_string = ? WHERE id = ?",
+                        (node.ip, node.port, 1, node.community, snmp_id)
+                    )
                 else:
                     cursor.execute(
                         "INSERT INTO parameters_for_connection_SNMP (ip, port, version_snmp, community_string) VALUES (?, ?, ?, ?)",
@@ -227,7 +239,6 @@ class DataBase:
                     )
                     snmp_id = cursor.lastrowid
 
-                # 3. Устройство (list_devices)
                 cursor.execute(
                     "SELECT id FROM list_devices WHERE name = ?",
                     (node.name,)
@@ -235,6 +246,10 @@ class DataBase:
                 device_row = cursor.fetchone()
                 if device_row:
                     device_id = device_row[0]
+                    cursor.execute(
+                        "UPDATE list_devices SET fk_location_id = ?, fk_parameters_for_connection_SNMP = ? WHERE id = ?",
+                        (location_id, snmp_id, device_id)
+                    )
                 else:
                     cursor.execute(
                         "INSERT INTO list_devices (name, fk_location_id, fk_parameters_for_connection_SNMP) VALUES (?, ?, ?)",
@@ -245,8 +260,9 @@ class DataBase:
                 # Сохраняем device_id в сам объект node для удобства последующих вставок
                 node.db_id = device_id
 
-                # 4. Параметры (viewed_parameters_snmp) и уставки (present_parameters_snmp)
+                #Параметры (viewed_parameters_snmp) и уставки (present_parameters_snmp)
                 for param in node.parameters:
+                    # viewed_parameters_snmp - с UPDATE
                     cursor.execute(
                         "SELECT id FROM viewed_parameters_snmp WHERE oid = ?",
                         (param.oid,)
@@ -254,6 +270,10 @@ class DataBase:
                     param_row = cursor.fetchone()
                     if param_row:
                         param_id = param_row[0]
+                        cursor.execute(
+                            "UPDATE viewed_parameters_snmp SET name_parameter = ? WHERE id = ?",
+                            (param.name, param_id)
+                        )
                     else:
                         cursor.execute(
                             "INSERT INTO viewed_parameters_snmp (name_parameter, oid) VALUES (?, ?)",
@@ -263,33 +283,28 @@ class DataBase:
 
                     param.db_id = param_id
 
-                    # Запись уставки / планового значения в present_parameters_snmp
+                    # present_parameters_snmp (уставки)
                     catch_val = str(param.target_value) if param.target_value is not None else ""
                     cursor.execute(
                         "SELECT id FROM present_parameters_snmp WHERE fk_list_devices_id = ? AND fk_viewed_parameter_snmp_id = ?",
                         (device_id, param_id)
                     )
-                    if not cursor.fetchone():
+                    existing = cursor.fetchone()
+                    if existing:
+                        cursor.execute(
+                            "UPDATE present_parameters_snmp SET catch_value = ?, fk_status_list_id = ? WHERE id = ?",
+                            (catch_val, 1, existing[0])
+                        )
+                    else:
                         cursor.execute(
                             "INSERT INTO present_parameters_snmp (fk_list_devices_id, fk_viewed_parameter_snmp_id, catch_value, fk_status_list_id) VALUES (?, ?, ?, ?)",
                             (device_id, param_id, catch_val, 1)
                         )
 
-            connection.commit()
-
-    def insert_history_record(self, device_id: int, param_id: int, value: str, status_id: int = 1):
-        """Добавляет замер значения в таблицу history_parameters_SNMP."""
-        with sqlite3.connect(self.db_path) as connection:
-            cursor = connection.cursor()
-            now_timestamp = int(time.time())
-            cursor.execute(
-                "INSERT INTO history_parameters_SNMP (fk_list_devices_id, fk_viewed_parameters_snmp_id, data_time, value, fk_status_list_id) VALUES (?, ?, ?, ?, ?)",
-                (device_id, param_id, now_timestamp, str(value), status_id)
-            )
-            connection.commit()
+                connection.commit()
             
 
 
-
-db = DataBase("C:/MyPythonProgramm/SNMP_simple/data/monitor.db")
-db.create_tables()
+if __name__ == '__main__':
+    db = DataBase("C:/MyPythonProgramm/SNMP_simple/data/monitor.db")
+    db.create_tables()

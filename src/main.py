@@ -77,11 +77,13 @@ async def main():
   # Настройка путей
   base_dir = Path(__file__).parent.parent
   yaml_path = base_dir / "data" / "hostsMap_1.yaml"
-  db_path = base_dir / "data" / "monitor.db"
+  db_path = base_dir / "jam_project" / "monitor.db"
 
   # Инициализация БД
   db = DataBase(str(db_path))
-  db.create_tables()
+
+  if not db.check_db_exist():
+    db.create_tables()
 
   # Загрузка узлов из YAML
   data = load_hostsMap(str(yaml_path))
