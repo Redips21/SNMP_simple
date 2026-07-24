@@ -302,6 +302,18 @@ class DataBase:
                         )
 
                 connection.commit()
+
+
+    def insert_history_record(self, device_id: int, param_id: int, value: str, status_id: int = 1):
+        """Добавляет замер значения в таблицу history_parameters_SNMP."""
+        with sqlite3.connect(self.db_path) as connection:
+            cursor = connection.cursor()
+            now_timestamp = int(time.time())
+            cursor.execute(
+                "INSERT INTO history_parameters_SNMP (fk_list_devices_id, fk_viewed_parameters_snmp_id, data_time, value, fk_status_list_id) VALUES (?, ?, ?, ?, ?)",
+                (device_id, param_id, now_timestamp, str(value), status_id)
+            )
+            connection.commit()
             
 
 
